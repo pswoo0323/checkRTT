@@ -1,0 +1,94 @@
+import boto3
+import requests
+import csv
+import time
+from datetime import datetime
+from io import StringIO
+
+# AWS S3 클라이언트를 초기화
+s3 = boto3.client('s3')
+
+# S3 버킷과 파일 이름을 지정
+bucket_name = 'rttbuckett'
+file_name = 'nile.csv'
+
+# RTT를 측정하는 함수
+def measure_rtt(url):
+    start_time = time.time()#시작 시간
+    try:
+        response = requests.get(url)
+        end_time = time.time()  # HTTP 요청 후 종료 시점을 기록
+        rtt = (f"{end_time - start_time:.4f} sec") # RTT를 밀리초 단위로 계산
+        status_code = response.status_code
+    except requests.exceptions.RequestException as e:
+
+        rtt = None
+        status_code = None
+    
+    return rtt, status_code
+
+# Lambda 함수의 진입점
+def lambda_handler(event, context):
+    url = f"https://{bucket_name}.s3.ap-northeast-2.amazonaws.com/{file_name}"
+    
+    rtt, rtt_status_code = measure_rtt(url)
+    
+    # 현재 날짜와 시간을 지정된 형식으로 추출
+    current_time = datetime.now()
+    date_str = current_time.strftime('%y%m%d')
+    time_str = current_time.strftime('%H:%M:%S')
+    
+    # StringIO 객체를 생성하여 CSV 데이터를 메모리 내에서 관리
+    csv_content = StringIO()
+    fieldnames = ['date', 'time', 'RTT', 'RTT_StatusCode']
+    writer = csv.DictWriter(csv_content, fieldnames=fieldnames)
+    
+    # 기존 CSV 파일이 이미 존재하는지 확인하고 읽어오기
+    try:
+        existing_object = s3.get_object(Bucket=bucket_name, Key=file_name)
+        existing_data = existing_object['Body'].read().decode('utf-8')
+        csv_content.write(existing_data)
+        csv_content.seek(0)
+        reader = csv.DictReader(csv_content)
+        existing_rows = list(reader)
+
+        for row in existing_rows:
+            row.pop('start_time', None)
+            row.pop('end_time', None)
+            
+        csv_content.seek(0)
+        csv_content.truncate()
+        writer.writeheader()
+        writer.writerows(existing_rows)  # 기존의 모든 데이터를 추가
+        csv_content.seek(0, 2)  # 파일 끝으로 이동
+    except s3.exceptions.NoSuchKey:
+        writer.writeheader()
+    
+    # 새로운 데이터를 StringIO 객체에 추가
+    writer.writerow({
+        'date': date_str,
+        'time': time_str,
+        'RTT': rtt,
+        'RTT_StatusCode': rtt_status_code
+    })
+    
+    # StringIO 객체를 닫기 전에 내용을 추출하여 S3에 업로드
+    csv_content_value = csv_content.getvalue()
+    csv_content.close()
+    
+    # S3에 파일 업로드
+    s3.put_object(
+        Bucket=bucket_name,
+        Key=file_name,
+        Body=csv_content_value  # StringIO 객체의 내용을 문자열로 추출하여 업로드
+    )
+    
+    # 객체의 ACL을 'public-read'로 설정하여 모든 사용자에게 읽기 권한을 부여합니다.
+    s3.put_object_acl(Bucket=bucket_name, Key=file_name, ACL='public-read')
+    
+    print(f"Data saved to S3 bucket {bucket_name} with key {file_name}")
+    
+    return {
+        'statusCode': 200,
+        'body': 'Log data saved to S3'
+    }
