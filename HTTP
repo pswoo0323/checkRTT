@@ -1,0 +1,70 @@
+//HTTP GET호출 함수
+
+import time
+import requests
+import csv
+import threading
+from datetime import datetime
+
+def dict_to_csv(data, csv_file):
+    with open(csv_file, 'a', newline='') as file:
+        fieldnames = ['time', 'AWS_Seoul', 'GCP_Seoul', 'Azure_Seoul', 'NAVER_Seoul']
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+        # 파일이 비어 있으면 헤더를 작성
+        file.seek(0, 2)
+        if file.tell() == 0:
+            writer.writeheader()
+
+        writer.writerow(data)
+
+def get_ping2(url):
+    try:
+        start_time = time.time()
+        response = requests.get(url)
+        end_time = time.time()
+
+        if response.status_code == 200:
+            rtt = (end_time - start_time) * 1000 
+            return rtt
+        else:
+            print(f"Request failed with status code: {response.status_code}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return None
+
+def get_ping2_threading(url, name):
+    rtt = get_ping2(url)
+    if rtt is not None:
+        result[name] = f"{rtt:.2f}"
+    else:
+        result[name] = "N/A"
+
+def run_pings():
+    global result
+    result = {}
+    threads = []
+
+    threads.append(threading.Thread(target=get_ping2_threading, args=("https://rttbuckett.s3.ap-northeast-2.amazonaws.com/nile.csv", "AWS_Seoul")))
+    threads.append(threading.Thread(target=get_ping2_threading, args=("https://storage.googleapis.com/bucket0609/cities.csv", "GCP_Seoul")))
+    threads.append(threading.Thread(target=get_ping2_threading, args=("https://rttblob.blob.core.windows.net/rtt-container/Azure.csv", "Azure_Seoul")))
+    threads.append(threading.Thread(target=get_ping2_threading, args=("https://kr.object.ncloudstorage.com/rtttest/ping", "NAVER_Seoul")))
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    # 현재 시간을 추가
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    result['time'] = current_time
+
+    dict_to_csv(result, 'latency.csv')
+
+if __name__ == "__main__":
+    while True:
+        run_pings()
+        time.sleep(60)
