@@ -5,20 +5,20 @@ import time
 from datetime import datetime
 from io import StringIO
 
-# AWS S3 클라이언트를 초기화
+
 s3 = boto3.client('s3')
 
-# S3 버킷과 파일 이름을 지정
-bucket_name = 'rttbuckett'
-file_name = 'nile.csv'
 
-# RTT를 측정하는 함수
+bucket_name = ''
+file_name = ''
+
+
 def measure_rtt(url):
-    start_time = time.time()#시작 시간
+    start_time = time.time()
     try:
         response = requests.get(url)
-        end_time = time.time()  # HTTP 요청 후 종료 시점을 기록
-        rtt = (f"{end_time - start_time:.4f} sec") # RTT를 밀리초 단위로 계산
+        end_time = time.time()  
+        rtt = (f"{end_time - start_time:.4f} sec") 
         status_code = response.status_code
     except requests.exceptions.RequestException as e:
 
@@ -33,12 +33,10 @@ def lambda_handler(event, context):
     
     rtt, rtt_status_code = measure_rtt(url)
     
-    # 현재 날짜와 시간을 지정된 형식으로 추출
     current_time = datetime.now()
     date_str = current_time.strftime('%y%m%d')
     time_str = current_time.strftime('%H:%M:%S')
     
-    # StringIO 객체를 생성하여 CSV 데이터를 메모리 내에서 관리
     csv_content = StringIO()
     fieldnames = ['date', 'time', 'RTT', 'RTT_StatusCode']
     writer = csv.DictWriter(csv_content, fieldnames=fieldnames)
