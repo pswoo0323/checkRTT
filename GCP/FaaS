@@ -1,0 +1,76 @@
+import functions_framework
+import requests
+import csv
+import time
+from datetime import datetime
+from google.cloud import storage
+from io import StringIO
+
+storage_client = storage.Client()
+
+# GCS 버킷과 파일 이름을 지정
+bucket_name = ''
+file_name = ''
+
+# RTT를 측정하는 함수
+def measure_rtt(url):
+    start_time = time.time()  
+    try:
+        response = requests.get(url)
+        end_time = time.time()  
+        rtt = (f"{end_time - start_time:.4f} sec") 
+        status_code = response.status_code
+    except requests.exceptions.RequestException as e:
+        rtt = None
+        status_code = None
+    
+    return rtt, status_code
+
+# Cloud Function의 진입점
+@functions_framework.http
+def check_rtt(request):
+    url = f""
+    
+    rtt, rtt_status_code = measure_rtt(url)
+    
+    # 현재 날짜와 시간을 지정된 형식으로 추출
+    current_time = datetime.now()
+    date_str = current_time.strftime('%y%m%d')
+    time_str = current_time.strftime('%H:%M:%S')
+    
+    # StringIO 객체를 생성하여 CSV 데이터를 메모리 내에서 관리
+    csv_content = StringIO()
+    fieldnames = ['date', 'time', 'RTT', 'RTT_StatusCode']
+    writer = csv.DictWriter(csv_content, fieldnames=fieldnames)
+    
+    # 기존 CSV 파일이 이미 존재하는지 확인하고 읽어오기
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(file_name)
+    
+    existing_data = blob.download_as_string().decode('utf-8')
+    csv_content.write(existing_data)
+    csv_content.seek(0, 2)  
+    
+    # 새로운 데이터를 StringIO 객체에 추가
+    writer.writerow({
+        'date': date_str,
+        'time': time_str,
+        'RTT': rtt,
+        'RTT_StatusCode': rtt_status_code
+    })
+    
+    # StringIO 객체를 닫기 전에 내용을 추출하여 GCS에 업로드
+    csv_content_value = csv_content.getvalue()
+    csv_content.close()
+    
+    # GCS에 파일 업로드
+    blob.upload_from_string(csv_content_value, content_type='text/csv')
+
+    #blob.make_public()  
+    
+    print(f"Data saved to GCS bucket {bucket_name} with key {file_name}")
+    
+    return {
+        'statusCode': 200,
+        'body': 'Log data saved to GCS'
+    }
