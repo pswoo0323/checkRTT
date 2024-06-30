@@ -1,0 +1,97 @@
+package rttPackage;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.logging.Level;
+
+import com.azure.core.util.BinaryData;
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.microsoft.azure.functions.ExecutionContext;
+import com.microsoft.azure.functions.annotation.FunctionName;
+import com.microsoft.azure.functions.annotation.TimerTrigger;
+
+public class TimerTriggerJava1 {
+    @FunctionName("TimerTriggerJava1")
+    public void run(
+        @TimerTrigger(name = "timerInfo", schedule = "0 */2 * * * *") String timerInfo,
+        final ExecutionContext context
+    ) {
+        context.getLogger().log(Level.INFO, "Java Timer trigger function executed at: {0}", LocalDateTime.now());
+
+        try {
+            String storageConnectionString = System.getenv("AZURE_STORAGE_CONNECTION_STRING");
+            context.getLogger().log(Level.INFO, "Storage Connection String: {0}", storageConnectionString);
+            String containerName = "rtt-container";
+            String blobName = "Azure.csv";
+
+            BlobServiceClient blobServiceClient = new BlobServiceClientBuilder()
+                .connectionString(storageConnectionString)
+                .buildClient();
+            BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+            BlobClient blobClient = containerClient.getBlobClient(blobName);
+
+            context.getLogger().info("Blob client initialized");
+
+            // RTT 측정 및 CSV 파일 업로드 로직
+            URL url = new URL("");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true); 
+            String postData = ""; // 전송할 데이터가 없으면 빈 문자열
+            byte[] postDataBytes = postData.getBytes("UTF-8");
+            connection.setRequestProperty("Content-Length", String.valueOf(postDataBytes.length));
+
+            long startTime = System.currentTimeMillis();
+            try (OutputStream os = connection.getOutputStream()) {
+                os.write(postDataBytes);
+            }
+            int responseCode = connection.getResponseCode();
+            long endTime = System.currentTimeMillis();
+            double rtt = (endTime - startTime) / 1000.0;
+            
+            String formattedRTT = String.format("%.4f sec", rtt);
+            context.getLogger().log(Level.INFO, "RTT measured: {0} sec", formattedRTT);
+
+            // 현재 날짜와 시간을 추출하여 형식화
+            LocalDateTime currentTime = LocalDateTime.now();
+            String dateStr = currentTime.format(DateTimeFormatter.ofPattern("yyMMdd"));
+            String timeStr = currentTime.format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+            // CSV 파일 생성
+            StringBuilder csvContent = new StringBuilder();
+
+            // 기존 CSV 파일 읽기
+            if (blobClient.exists()) {
+                BinaryData content = blobClient.downloadContent();
+                ByteArrayInputStream inputStream = new ByteArrayInputStream(content.toBytes());
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        csvContent.append(line).append("\n");
+                    }
+                }
+            } else {
+                // 기존 데이터가 없으면 헤더를 추가
+                csvContent.append("date,time,RTT,RTT_StatusCode\n");
+            }
+            
+            // 새로운 데이터를 추가
+            csvContent.append(dateStr).append(",").append(timeStr).append(",").append(formattedRTT).append(",").append(responseCode).append("\n");
+
+            // Blob 업로드
+            blobClient.upload(new ByteArrayInputStream(csvContent.toString().getBytes()), csvContent.length(), true);
+        } catch (IOException e) {
+            context.getLogger().log(Level.SEVERE, "Error measuring RTT or uploading to Blob Storage: {0}", e.getMessage());
+        }
+    }
+}
