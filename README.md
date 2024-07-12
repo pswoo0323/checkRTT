@@ -18,3 +18,7 @@ I collected the data for 7days.
 |GCP_Seoul|191.66|122.21|677.50|58.38|
 |Azure_Seoul|119.99|66.15|371.69|37.55|
 |Naver_Seoul|63.68|31.35|177.52|14.05|
+
+Speed: Average RTT: Naver Cloud < Azure < GCP< AWS
+Variability: RTT 변동성(표준편차): Naver Cloud < Azure < GCP < AWS
+Max RTT: Naver Cloud < Azure < GCP < AWS
