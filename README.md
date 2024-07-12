@@ -11,3 +11,10 @@ So I started my research because I was curious about the network latency from my
 # Result
 I collected the data for 7days.
 ![image](https://github.com/user-attachments/assets/6a563654-c395-4fb0-b3b6-2cebf540bcb9)
+
+|Platform|Average RTT(ms)|Std RTT(ms)|Max RTT(ms)|Min RTT(ms)|
+|------|---|---|---|---|
+|AWS_Seoul|285.85|176.80|1011.54|60.88|
+|GCP_Seoul|191.66|122.21|677.50|58.38|
+|Azure_Seoul|119.99|66.15|371.69|37.55|
+|Naver_Seoul|63.68|31.35|177.52|14.05|
