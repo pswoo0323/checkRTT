@@ -29,4 +29,5 @@ I collected the data for 7days.
 |GCP_Seoul|	0.749633|	|	0.870898|	0.747465|
 |Azure_Seoul|	0.704170|	0.870898|		|0.766605|
 |Ncloud_Seoul|	0.599486|	0.747465|	0.766605| |	
+
 AWS, GCP, Azure, and NAVER exhibit a high correlation in RTT with each other, so it may be more advantageous to use each platform for backup purposes rather than traffic distribution. In particular, the correlation between AWS and NAVER is lower compared to other platform combinations, which suggests that combining these two platforms in a multi-cloud strategy can yield complementary effects.
